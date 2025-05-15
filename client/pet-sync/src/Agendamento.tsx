@@ -1,0 +1,533 @@
+import { useState, useEffect } from "react";
+import { Button } from "@/components/ui/button";
+import { Switch } from "@/components/ui/switch";
+import { Label } from "@/components/ui/label";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardFooter,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import { Clock, Plus, Trash2, RefreshCw, UtensilsCrossed } from "lucide-react";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import { Progress } from "@/components/ui/progress"; // Import Progress from shadcn
+import { cn } from "@/lib/utils";
+import { Input } from "./components/ui/input";
+import styles from "./styles/Agendamento.module.css";
+
+// Time picker options
+const timeOptions: { value: string; label: string }[] = [];
+for (let hour = 0; hour < 24; hour++) {
+  for (let minute = 0; minute < 60; minute += 30) {
+    const formattedHour = hour.toString().padStart(2, "0");
+    const formattedMinute = minute.toString().padStart(2, "0");
+    timeOptions.push({
+      value: `${formattedHour}:${formattedMinute}`,
+      label: `${formattedHour}:${formattedMinute}`,
+    });
+  }
+}
+
+interface TimeSlot {
+  id: number;
+  time: string;
+  enabled: boolean;
+  weight: string;
+}
+
+interface SaveAgendamentoRequest {
+  id: string;
+  hora: string;
+  hasAutomatico: boolean;
+  peso: string;
+  enabled: boolean;
+}
+
+function Agendamento() {
+  const [times, setTimes] = useState<TimeSlot[]>([
+    { id: 1, time: "08:00", enabled: true, weight: "" },
+  ]);
+  const [autoRefill, setAutoRefill] = useState(false);
+  const [alertOpen, setAlertOpen] = useState(false);
+  const [timePickerOpen, setTimePickerOpen] = useState<number | null>(null);
+  const [shouldSave, setShouldSave] = useState(false);
+  const [foodLevel, setFoodLevel] = useState(0);
+  const [socket, setSocket] = useState<WebSocket | null>(null);
+
+  useEffect(() => {
+    const fetchAgendamentos = async () => {
+      try {
+        const response = await fetch(
+          "http://localhost:5000/api/listaAgendamentos"
+        );
+        if (!response.ok) {
+          throw new Error("Failed to fetch agendamentos");
+        }
+        const data = await response.json();
+
+        const transformedData = data.map((item: SaveAgendamentoRequest) => ({
+          id: parseInt(item.id),
+          time: item.hora,
+          enabled: item.enabled,
+          weight: item.peso || "",
+        }));
+
+        setTimes(transformedData);
+        setAutoRefill(data[0]?.hasAutomatico || false);
+      } catch (error) {
+        console.error("Error fetching agendamentos:", error);
+      }
+    };
+
+    fetchAgendamentos();
+  }, []);
+
+  useEffect(() => {
+    const newSocket = new WebSocket("ws://localhost:5000");
+
+    newSocket.addEventListener("open", () => {
+      console.log("Connected to WebSocket server");
+      setSocket(newSocket);
+    });
+
+    newSocket.addEventListener("message", (event) => {
+      try {
+        const data = JSON.parse(event.data);
+        if (data.level !== undefined) {
+          setFoodLevel(data.level);
+        }
+        if (data.autoRefill !== undefined) {
+          setAutoRefill(data.autoRefill);
+        }
+      } catch (error) {
+        console.error("Error parsing WebSocket message:", error);
+      }
+    });
+
+    newSocket.addEventListener("close", () => {
+      console.log("Disconnected from WebSocket server");
+      setSocket(null);
+    });
+
+    newSocket.addEventListener("error", (event) => {
+      console.error("WebSocket error:", event);
+      setSocket(null);
+    });
+
+    return () => {
+      newSocket.close();
+    };
+  }, []);
+
+  useEffect(() => {
+    if (autoRefill) {
+      setTimes((prevTimes) =>
+        prevTimes.map((time) => ({ ...time, enabled: false }))
+      );
+    }
+  }, [autoRefill]);
+
+  const addTime = () => {
+    if (times.length < 5) {
+      const newId = Math.max(0, ...times.map((t) => t.id)) + 1;
+      setTimes([
+        ...times,
+        { id: newId, time: "", enabled: !autoRefill, weight: "" },
+      ]);
+    }
+  };
+
+  const removeTime = (id: number) => {
+    setTimes(times.filter((time) => time.id !== id));
+  };
+
+  const updateTime = (
+    id: number,
+    field: keyof TimeSlot,
+    value: string | boolean
+  ) => {
+    if (field === "time") {
+      setTimePickerOpen(null);
+    }
+    setTimes(
+      times.map((time) => {
+        if (time.id === id) {
+          return { ...time, [field]: value };
+        }
+        return time;
+      })
+    );
+  };
+
+  const toggleAutoRefill = (checked: boolean) => {
+    setAutoRefill(checked);
+    // Send the new auto refill state through WebSocket
+    if (socket && socket.readyState === WebSocket.OPEN) {
+      socket.send(JSON.stringify({ autoRefill: checked }));
+    }
+  };
+
+  const handleSaveClick = () => {
+    setAlertOpen(true);
+  };
+
+  const dispenseFoodHandler = () => {
+    if (socket && socket.readyState === WebSocket.OPEN) {
+      socket.send(JSON.stringify({ action: "dispenseFood" }));
+    } else {
+      console.warn("WebSocket not connected, cannot dispense food");
+      setFoodLevel((prev) => Math.min(prev + 20, 100));
+    }
+  };
+
+  useEffect(() => {
+    const saveAgendamento = async () => {
+      try {
+        const agendamentos: SaveAgendamentoRequest[] = times.map(
+          (time, index) => ({
+            id: (index + 1).toString(),
+            hora: time.time,
+            hasAutomatico: autoRefill,
+            peso: time.weight,
+            enabled: time.enabled,
+          })
+        );
+
+        const saveResponse = await fetch(
+          "http://localhost:5000/api/salvarAgendamento",
+          {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify(agendamentos),
+          }
+        );
+
+        if (!saveResponse.ok) {
+          throw new Error("Falha ao salvar agendamento");
+        }
+
+        const saveData = await saveResponse.json();
+        console.log("Save Response:", saveData);
+        setAlertOpen(false);
+      } catch (error) {
+        console.error("API Error:", error);
+      } finally {
+        setShouldSave(false);
+      }
+    };
+
+    if (shouldSave) {
+      saveAgendamento();
+    }
+  }, [shouldSave, times, autoRefill]);
+
+  const handleConfirmSave = () => {
+    setShouldSave(true);
+  };
+
+  const usedTimes = times.map((t) => t.time);
+
+  return (
+    <div className="flex flex-col items-center min-h-svh bg-black p-4 sm:p-6">
+      <Card className={`w-full max-w-md shadow-lg ${styles.glowEffect}`}>
+        <CardHeader className="bg-gradient-to-r from-blue-500 to-purple-500 text-white rounded-t-lg">
+          <div className="flex items-center justify-between">
+            <div>
+              <CardTitle className="text-xl sm:text-2xl font-bold">
+                PetSync
+              </CardTitle>
+              <CardDescription className="text-blue-100 text-sm sm:text-base">
+                Agende as refeições do seu pet!
+              </CardDescription>
+            </div>
+            <Clock className="h-6 w-6 sm:h-8 sm:w-8 text-white opacity-70" />
+          </div>
+        </CardHeader>
+
+        <CardContent className="pt-4 sm:pt-6">
+          <div className="mb-6 p-3 rounded-lg bg-white border border-gray-200 shadow-sm">
+            <div className="flex flex-col">
+              <div className="flex items-center justify-between mb-2">
+                <h3 className="font-medium text-gray-700">Nível da ração</h3>
+                <span className="text-sm text-gray-500">
+                  {foodLevel}% Cheio
+                </span>
+              </div>
+
+              <Progress value={foodLevel} className="mb-3" />
+
+              <Button
+                onClick={dispenseFoodHandler}
+                className="bg-amber-500 hover:bg-amber-600 w-full flex items-center justify-center"
+              >
+                <UtensilsCrossed className="mr-2 h-5 w-5" />
+                Despejar Comida
+              </Button>
+            </div>
+          </div>
+
+          {/* Auto refill toggle */}
+          <div className="mb-6 p-3 rounded-lg bg-white border border-gray-200 shadow-sm">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center space-x-2">
+                <RefreshCw
+                  className={`h-5 w-5 ${
+                    autoRefill ? "text-green-500" : "text-gray-400"
+                  }`}
+                />
+                <Label
+                  htmlFor="auto-refill"
+                  className="text-gray-700 font-medium"
+                >
+                  Repor Automaticamente
+                </Label>
+              </div>
+              <Switch
+                checked={autoRefill}
+                onCheckedChange={toggleAutoRefill}
+                id="auto-refill"
+                className={autoRefill ? "bg-green-500" : ""}
+              />
+            </div>
+          </div>
+
+          <div className="space-y-4">
+            {times.map((time) => (
+              <div
+                key={time.id}
+                className="flex flex-col p-3 rounded-lg bg-white border border-gray-200 shadow-sm"
+              >
+                <div className="flex flex-wrap sm:flex-nowrap items-center w-full">
+                  <div className="flex items-center space-x-3 flex-1 w-full sm:w-auto mb-2 sm:mb-0">
+                    <div className="flex items-center space-x-2">
+                      <Popover
+                        open={timePickerOpen === time.id}
+                        onOpenChange={(open) =>
+                          setTimePickerOpen(open ? time.id : null)
+                        }
+                      >
+                        <PopoverTrigger asChild>
+                          <Button
+                            variant="outline"
+                            className={cn(
+                              "w-28 justify-start text-left font-mono font-medium",
+                              !time.time && "text-gray-400"
+                            )}
+                            disabled={autoRefill}
+                          >
+                            {time.time || "Horário"}
+                            <Clock className="ml-auto h-4 w-4 opacity-50" />
+                          </Button>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-auto p-0" align="start">
+                          <div className="grid grid-cols-4 gap-2 p-2 max-h-80 overflow-y-auto">
+                            {timeOptions.map((option) => {
+                              const isUsed =
+                                usedTimes.includes(option.value) &&
+                                time.time !== option.value;
+                              return (
+                                <Button
+                                  key={option.value}
+                                  variant={
+                                    time.time === option.value
+                                      ? "default"
+                                      : "outline"
+                                  }
+                                  size="sm"
+                                  className={cn(
+                                    "font-mono",
+                                    isUsed && "opacity-50 cursor-not-allowed"
+                                  )}
+                                  onClick={() =>
+                                    updateTime(time.id, "time", option.value)
+                                  }
+                                  disabled={isUsed}
+                                >
+                                  {option.label}
+                                </Button>
+                              );
+                            })}
+                          </div>
+                          <div className="border-t pt-2 px-2 pb-2">
+                            <div className="font-medium text-sm mb-2 text-gray-500">
+                              Common times
+                            </div>
+                            <div className="flex flex-wrap gap-2">
+                              {["08:00", "12:00", "18:00", "21:00"].map(
+                                (quickTime) => {
+                                  const isUsed =
+                                    usedTimes.includes(quickTime) &&
+                                    time.time !== quickTime;
+                                  return (
+                                    <Button
+                                      key={quickTime}
+                                      variant={
+                                        time.time === quickTime
+                                          ? "default"
+                                          : "outline"
+                                      }
+                                      size="sm"
+                                      className={cn(
+                                        isUsed &&
+                                          "opacity-50 cursor-not-allowed"
+                                      )}
+                                      onClick={() =>
+                                        updateTime(time.id, "time", quickTime)
+                                      }
+                                      disabled={isUsed}
+                                    >
+                                      {quickTime}
+                                    </Button>
+                                  );
+                                }
+                              )}
+                            </div>
+                          </div>
+                        </PopoverContent>
+                        <Input
+                          type="text"
+                          placeholder="Peso (G)"
+                          className="w-28 ml-2 mr-4 font-bold"
+                          value={time.weight ? `${time.weight} Gramas` : ""}
+                          onChange={(e) => {
+                            // Remove any non-numeric characters
+                            const numericValue = e.target.value.replace(
+                              /[^0-9]/g,
+                              ""
+                            );
+                            // Only update if it's a number or empty and less than 4 digits
+                            if (
+                              (numericValue === "" ||
+                                /^\d+$/.test(numericValue)) &&
+                              numericValue.length <= 3
+                            ) {
+                              updateTime(time.id, "weight", numericValue);
+                            }
+                          }}
+                          disabled={autoRefill}
+                        />
+                      </Popover>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center space-x-2">
+                    <Switch
+                      checked={time.enabled}
+                      onCheckedChange={(checked) =>
+                        updateTime(time.id, "enabled", checked)
+                      }
+                      id={`switch-${time.id}`}
+                      disabled={autoRefill}
+                    />
+                    <Label
+                      htmlFor={`switch-${time.id}`}
+                      className={`${
+                        autoRefill ? "text-gray-400" : "text-gray-700"
+                      }`}
+                    >
+                      {time.enabled && !autoRefill ? "Ativado" : "Inativo"}
+                    </Label>
+                  </div>
+
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => removeTime(time.id)}
+                    className="ml-auto text-gray-500 hover:text-red-500"
+                    disabled={autoRefill}
+                  >
+                    <Trash2 className="h-5 w-5 fixed" />
+                  </Button>
+                </div>
+              </div>
+            ))}
+
+            {times.length < 5 && (
+              <Button
+                variant="outline"
+                className="w-full flex items-center justify-center border-dashed border-2 py-4 sm:py-6 text-gray-500 hover:text-blue-600 hover:border-blue-400 transition-colors"
+                onClick={addTime}
+                disabled={autoRefill}
+              >
+                <Plus className="mr-2 h-5 w-5" />
+                <span className="text-sm sm:text-base">
+                  Agendar refeição ({times.length}/5)
+                </span>
+              </Button>
+            )}
+          </div>
+        </CardContent>
+
+        <CardFooter className="flex flex-col sm:flex-row sm:justify-between border-t p-4 bg-gray-50 gap-3">
+          <div className="text-sm text-gray-500 w-full sm:w-auto text-center sm:text-left">
+            {autoRefill ? (
+              <span className="font-medium text-green-600">
+                Auto refill mode active
+              </span>
+            ) : (
+              <span>
+                {times.filter((t) => t.enabled).length}
+                {times.filter((t) => t.enabled).length !== 1
+                  ? " Refeições"
+                  : " Refeição"}
+              </span>
+            )}
+          </div>
+          <Button
+            className="bg-black  w-full sm:w-auto text-white hover:text-black"
+            onClick={handleSaveClick}
+            variant={"outline"}
+          >
+            Confirme Agendamento
+          </Button>
+        </CardFooter>
+      </Card>
+
+      {/* Alert Dialog for confirming schedule changes */}
+      <AlertDialog open={alertOpen} onOpenChange={setAlertOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              Confirmar alteração de configuração
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              Você tem certeza que quer alterar a configuração atual?
+              {autoRefill && (
+                <p className="mt-2 font-medium text-amber-600">
+                  O parâmetro "Repor Automaticamente" está ativo. Quer seguir
+                  mesmo assim?
+                </p>
+              )}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction onClick={handleConfirmSave}>
+              Confirmar
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </div>
+  );
+}
+
+export default Agendamento;
