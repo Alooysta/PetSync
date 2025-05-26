@@ -6,18 +6,20 @@ const WebSocket = require("ws");
 require("dotenv").config();
 
 const app = express();
-const PORT = 5000;
+const PORT = process.env.PORT || 5000;
 
 const server = http.createServer(app);
-
 const wss = new WebSocket.Server({ server });
 
+// WebSocket state
 let currentFoodLevel = 50;
 let autoRefillEnabled = false;
 
+// WebSocket connection handling
 wss.on("connection", (ws) => {
   console.log("Client connected");
 
+  // Send current state to new client
   ws.send(
     JSON.stringify({
       level: currentFoodLevel,
@@ -56,38 +58,51 @@ wss.on("connection", (ws) => {
   ws.on("close", () => {
     console.log("Client disconnected");
   });
+
+  ws.on("error", (error) => {
+    console.error("WebSocket error:", error);
+  });
 });
 
 function broadcastFoodLevel() {
+  const message = JSON.stringify({
+    level: currentFoodLevel,
+    autoRefill: autoRefillEnabled,
+  });
+
   wss.clients.forEach((client) => {
     if (client.readyState === WebSocket.OPEN) {
-      client.send(
-        JSON.stringify({
-          level: currentFoodLevel,
-          autoRefill: autoRefillEnabled,
-        })
-      );
+      client.send(message);
     }
   });
 }
 
 // Middleware
-app.use(cors());
+app.use(
+  cors({
+    origin: process.env.FRONTEND_URL || "*",
+    credentials: true,
+  })
+);
 app.use(express.json());
 
+// MongoDB Connection
 const uri = process.env.MONGODB_URI;
 
-async function connect() {
+async function connectDB() {
   try {
-    await mongoose.connect(uri);
-    console.log("Conectado ao MongoDB");
+    await mongoose.connect(uri, {
+      useNewUrlParser: true,
+      useUnifiedTopology: true,
+    });
+    console.log("Connected to MongoDB");
   } catch (error) {
-    console.error(error);
+    console.error("MongoDB connection error:", error);
+    process.exit(1);
   }
 }
 
-connect();
-
+// MongoDB Schema
 const agendamentoSchema = new mongoose.Schema(
   {
     id: {
@@ -119,18 +134,44 @@ const agendamentoSchema = new mongoose.Schema(
 
 const Agendamento = mongoose.model("Agendamento", agendamentoSchema);
 
-// Rota de teste
+// Routes
+app.get("/", (req, res) => {
+  res.json({
+    message: "Pet Feeder API is running!",
+    websocket: "Available",
+    endpoints: [
+      "GET /api/teste",
+      "GET /api/listaAgendamentos",
+      "POST /api/salvarAgendamento",
+      "POST /api/setFoodLevel",
+      "GET /api/getFoodLevel",
+    ],
+  });
+});
+
 app.get("/api/teste", (req, res) => {
   res.json({ mensagem: "API funcionando corretamente!" });
+});
+
+app.get("/api/getFoodLevel", (req, res) => {
+  res.json({
+    level: currentFoodLevel,
+    autoRefill: autoRefillEnabled,
+  });
 });
 
 app.post("/api/salvarAgendamento", async (req, res) => {
   try {
     const agendamentos = req.body;
-    const results = [];
 
+    if (!Array.isArray(agendamentos)) {
+      return res.status(400).json({ erro: "Expected array of agendamentos" });
+    }
+
+    const results = [];
     const maxIncomingId = Math.max(...agendamentos.map((a) => parseInt(a.id)));
 
+    // Delete agendamentos with IDs greater than the max incoming ID
     await Agendamento.deleteMany({
       id: {
         $gt: maxIncomingId.toString(),
@@ -162,7 +203,7 @@ app.post("/api/salvarAgendamento", async (req, res) => {
 
 app.get("/api/listaAgendamentos", async (req, res) => {
   try {
-    const agendamentos = await Agendamento.find({});
+    const agendamentos = await Agendamento.find({}).sort({ id: 1 });
     res.status(200).json(agendamentos);
   } catch (error) {
     console.error("Erro ao buscar agendamentos:", error);
@@ -180,13 +221,86 @@ app.post("/api/setFoodLevel", (req, res) => {
   }
 
   currentFoodLevel = level;
-
   broadcastFoodLevel();
 
-  res.status(200).json({ success: true, level });
+  res.status(200).json({ success: true, level: currentFoodLevel });
 });
 
-server.listen(PORT, () => {
-  console.log(`Servidor rodando na porta ${PORT}`);
-  console.log(`WebSocket server está ativo`);
+app.post("/api/dispenseFood", (req, res) => {
+  const { amount = 20 } = req.body;
+
+  if (typeof amount !== "number" || amount < 0 || amount > 100) {
+    return res.status(400).json({
+      error: "Invalid amount. Must be a number between 0-100",
+    });
+  }
+
+  currentFoodLevel = Math.min(currentFoodLevel + amount, 100);
+  broadcastFoodLevel();
+
+  res.status(200).json({
+    success: true,
+    level: currentFoodLevel,
+    dispensed: amount,
+  });
 });
+
+app.post("/api/setAutoRefill", (req, res) => {
+  const { enabled } = req.body;
+
+  if (typeof enabled !== "boolean") {
+    return res.status(400).json({
+      error: "Invalid enabled value. Must be boolean",
+    });
+  }
+
+  autoRefillEnabled = enabled;
+  broadcastFoodLevel();
+
+  res.status(200).json({
+    success: true,
+    autoRefill: autoRefillEnabled,
+  });
+});
+
+// Health check endpoint
+app.get("/health", (req, res) => {
+  res.status(200).json({
+    status: "healthy",
+    timestamp: new Date().toISOString(),
+    uptime: process.uptime(),
+  });
+});
+
+// Error handling middleware
+app.use((err, req, res, next) => {
+  console.error(err.stack);
+  res.status(500).json({ error: "Something went wrong!" });
+});
+
+// Handle 404
+app.use("*", (req, res) => {
+  res.status(404).json({ error: "Route not found" });
+});
+
+// Graceful shutdown
+process.on("SIGTERM", () => {
+  console.log("SIGTERM received, shutting down gracefully");
+  server.close(() => {
+    mongoose.connection.close();
+    console.log("Server closed");
+  });
+});
+
+// Start server
+async function startServer() {
+  await connectDB();
+
+  server.listen(PORT, "0.0.0.0", () => {
+    console.log(`Server running on port ${PORT}`);
+    console.log(`WebSocket server is active`);
+    console.log(`Environment: ${process.env.NODE_ENV || "development"}`);
+  });
+}
+
+startServer().catch(console.error);

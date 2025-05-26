@@ -116,7 +116,7 @@ function Agendamento() {
           setAutoRefill(data.autoRefill);
         }
       } catch (error) {
-        console.error("Error parsing WebSocket message:", error);
+        console.error("Error parsing WebSocket message teste:", error);
       }
     });
 
