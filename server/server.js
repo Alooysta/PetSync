@@ -6,7 +6,7 @@ const WebSocket = require("ws");
 require("dotenv").config();
 
 const app = express();
-const PORT = process.env.PORT || 5000;
+const PORT = process.env.PORT || 10000;
 
 const server = http.createServer(app);
 const wss = new WebSocket.Server({ server });
@@ -94,11 +94,15 @@ async function connectDB() {
     await mongoose.connect(uri, {
       useNewUrlParser: true,
       useUnifiedTopology: true,
+      serverSelectionTimeoutMS: 5000, // Render has timeout limits
+      socketTimeoutMS: 45000,
     });
     console.log("Connected to MongoDB");
   } catch (error) {
     console.error("MongoDB connection error:", error);
-    process.exit(1);
+    // Don't exit process on Render, let it retry
+    console.log("Retrying connection in 5 seconds...");
+    setTimeout(connectDB, 5000);
   }
 }
 
