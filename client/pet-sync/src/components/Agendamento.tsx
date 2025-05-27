@@ -10,7 +10,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { Clock, Plus, Trash2, RefreshCw, UtensilsCrossed } from "lucide-react";
+import { Clock, Plus, Trash2, RefreshCw, Cat, Dog } from "lucide-react";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -26,10 +26,7 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
-import { Progress } from "@/components/ui/progress"; // Import Progress from shadcn
 import { cn } from "@/lib/utils";
-import { Input } from "./components/ui/input";
-import styles from "./styles/Agendamento.module.css";
 
 // Time picker options
 const timeOptions: { value: string; label: string }[] = [];
@@ -48,33 +45,30 @@ interface TimeSlot {
   id: number;
   time: string;
   enabled: boolean;
-  weight: string;
 }
 
 interface SaveAgendamentoRequest {
   id: string;
   hora: string;
   hasAutomatico: boolean;
-  peso: string;
   enabled: boolean;
 }
 
 function Agendamento() {
   const [times, setTimes] = useState<TimeSlot[]>([
-    { id: 1, time: "08:00", enabled: true, weight: "" },
+    { id: 1, time: "08:00", enabled: true },
   ]);
   const [autoRefill, setAutoRefill] = useState(false);
   const [alertOpen, setAlertOpen] = useState(false);
   const [timePickerOpen, setTimePickerOpen] = useState<number | null>(null);
   const [shouldSave, setShouldSave] = useState(false);
-  const [foodLevel, setFoodLevel] = useState(0);
   const [socket, setSocket] = useState<WebSocket | null>(null);
 
   useEffect(() => {
     const fetchAgendamentos = async () => {
       try {
         const response = await fetch(
-          "http://localhost:5000/api/listaAgendamentos"
+          "https://petsync.onrender.com/api/listaAgendamentos"
         );
         if (!response.ok) {
           throw new Error("Failed to fetch agendamentos");
@@ -85,7 +79,6 @@ function Agendamento() {
           id: parseInt(item.id),
           time: item.hora,
           enabled: item.enabled,
-          weight: item.peso || "",
         }));
 
         setTimes(transformedData);
@@ -99,7 +92,7 @@ function Agendamento() {
   }, []);
 
   useEffect(() => {
-    const newSocket = new WebSocket("ws://localhost:5000");
+    const newSocket = new WebSocket("wss://petsync.onrender.com/");
 
     newSocket.addEventListener("open", () => {
       console.log("Connected to WebSocket server");
@@ -109,14 +102,40 @@ function Agendamento() {
     newSocket.addEventListener("message", (event) => {
       try {
         const data = JSON.parse(event.data);
-        if (data.level !== undefined) {
-          setFoodLevel(data.level);
-        }
+
         if (data.autoRefill !== undefined) {
           setAutoRefill(data.autoRefill);
         }
+
+        // Handle initial agendamentos data sent on connection
+        if (data.agendamentos && Array.isArray(data.agendamentos)) {
+          console.log(
+            "Received agendamentos via WebSocket:",
+            data.agendamentos
+          );
+          const transformedData = data.agendamentos.map(
+            (item: SaveAgendamentoRequest) => ({
+              id: parseInt(item.id),
+              time: item.hora,
+              enabled: item.enabled,
+            })
+          );
+          setTimes(transformedData);
+          if (data.agendamentos.length > 0) {
+            setAutoRefill(data.agendamentos[0].hasAutomatico || false);
+          }
+        }
+
+        // Handle other message types
+        if (data.type === "dispenseFood") {
+          console.log("Dispense food message received:", data.message);
+        }
+
+        if (data.type === "agendamentosUpdate") {
+          console.log("Agendamentos update received:", data.agendamentos);
+        }
       } catch (error) {
-        console.error("Error parsing WebSocket message teste:", error);
+        console.error("Error parsing WebSocket message:", error);
       }
     });
 
@@ -146,10 +165,7 @@ function Agendamento() {
   const addTime = () => {
     if (times.length < 5) {
       const newId = Math.max(0, ...times.map((t) => t.id)) + 1;
-      setTimes([
-        ...times,
-        { id: newId, time: "", enabled: !autoRefill, weight: "" },
-      ]);
+      setTimes([...times, { id: newId, time: "", enabled: !autoRefill }]);
     }
   };
 
@@ -187,15 +203,6 @@ function Agendamento() {
     setAlertOpen(true);
   };
 
-  const dispenseFoodHandler = () => {
-    if (socket && socket.readyState === WebSocket.OPEN) {
-      socket.send(JSON.stringify({ action: "dispenseFood" }));
-    } else {
-      console.warn("WebSocket not connected, cannot dispense food");
-      setFoodLevel((prev) => Math.min(prev + 20, 100));
-    }
-  };
-
   useEffect(() => {
     const saveAgendamento = async () => {
       try {
@@ -204,13 +211,12 @@ function Agendamento() {
             id: (index + 1).toString(),
             hora: time.time,
             hasAutomatico: autoRefill,
-            peso: time.weight,
             enabled: time.enabled,
           })
         );
 
         const saveResponse = await fetch(
-          "http://localhost:5000/api/salvarAgendamento",
+          "https://petsync.onrender.com/api/salvarAgendamento",
           {
             method: "POST",
             headers: {
@@ -226,6 +232,17 @@ function Agendamento() {
 
         const saveData = await saveResponse.json();
         console.log("Save Response:", saveData);
+
+        // Send agendamentos data via WebSocket after successful save
+        if (socket && socket.readyState === WebSocket.OPEN) {
+          socket.send(
+            JSON.stringify({
+              agendamentos: agendamentos,
+            })
+          );
+          console.log("Agendamentos sent via WebSocket:", agendamentos);
+        }
+
         setAlertOpen(false);
       } catch (error) {
         console.error("API Error:", error);
@@ -237,7 +254,7 @@ function Agendamento() {
     if (shouldSave) {
       saveAgendamento();
     }
-  }, [shouldSave, times, autoRefill]);
+  }, [shouldSave, times, autoRefill, socket]);
 
   const handleConfirmSave = () => {
     setShouldSave(true);
@@ -246,9 +263,9 @@ function Agendamento() {
   const usedTimes = times.map((t) => t.time);
 
   return (
-    <div className="flex flex-col items-center min-h-svh bg-black p-4 sm:p-6">
-      <Card className={`w-full max-w-md shadow-lg ${styles.glowEffect}`}>
-        <CardHeader className="bg-gradient-to-r from-blue-500 to-purple-500 text-white rounded-t-lg">
+    <div className="flex items-center justify-center p-4 sm:p-6">
+      <Card className="w-full max-w-md shadow-lg  border-blue-500/30">
+        <CardHeader className="bg-gradient-to-r from-blue-500 to-purple-500 text-white rounded-t-lg ">
           <div className="flex items-center justify-between">
             <div>
               <CardTitle className="text-xl sm:text-2xl font-bold">
@@ -262,28 +279,7 @@ function Agendamento() {
           </div>
         </CardHeader>
 
-        <CardContent className="pt-4 sm:pt-6">
-          <div className="mb-6 p-3 rounded-lg bg-white border border-gray-200 shadow-sm">
-            <div className="flex flex-col">
-              <div className="flex items-center justify-between mb-2">
-                <h3 className="font-medium text-gray-700">Nível da ração</h3>
-                <span className="text-sm text-gray-500">
-                  {foodLevel}% Cheio
-                </span>
-              </div>
-
-              <Progress value={foodLevel} className="mb-3" />
-
-              <Button
-                onClick={dispenseFoodHandler}
-                className="bg-amber-500 hover:bg-amber-600 w-full flex items-center justify-center"
-              >
-                <UtensilsCrossed className="mr-2 h-5 w-5" />
-                Despejar Comida
-              </Button>
-            </div>
-          </div>
-
+        <CardContent className="pt-4 sm:pt-6 bg-gray-50">
           {/* Auto refill toggle */}
           <div className="mb-6 p-3 rounded-lg bg-white border border-gray-200 shadow-sm">
             <div className="flex items-center justify-between">
@@ -402,29 +398,11 @@ function Agendamento() {
                             </div>
                           </div>
                         </PopoverContent>
-                        <Input
-                          type="text"
-                          placeholder="Peso (G)"
-                          className="w-28 ml-2 mr-4 font-bold"
-                          value={time.weight ? `${time.weight} Gramas` : ""}
-                          onChange={(e) => {
-                            // Remove any non-numeric characters
-                            const numericValue = e.target.value.replace(
-                              /[^0-9]/g,
-                              ""
-                            );
-                            // Only update if it's a number or empty and less than 4 digits
-                            if (
-                              (numericValue === "" ||
-                                /^\d+$/.test(numericValue)) &&
-                              numericValue.length <= 3
-                            ) {
-                              updateTime(time.id, "weight", numericValue);
-                            }
-                          }}
-                          disabled={autoRefill}
-                        />
                       </Popover>
+                    </div>
+                    <div className="ml-4 flex items-center space-x-8">
+                      <Cat />
+                      <Dog />
                     </div>
                   </div>
 
@@ -454,7 +432,7 @@ function Agendamento() {
                     className="ml-auto text-gray-500 hover:text-red-500"
                     disabled={autoRefill}
                   >
-                    <Trash2 className="h-5 w-5 fixed" />
+                    <Trash2 className="h-5 w-5" />
                   </Button>
                 </div>
               </div>
@@ -492,7 +470,7 @@ function Agendamento() {
             )}
           </div>
           <Button
-            className="bg-black  w-full sm:w-auto text-white hover:text-black"
+            className="bg-black w-full sm:w-auto text-white hover:text-black"
             onClick={handleSaveClick}
             variant={"outline"}
           >

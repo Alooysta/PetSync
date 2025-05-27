@@ -6,26 +6,42 @@ const WebSocket = require("ws");
 require("dotenv").config();
 
 const app = express();
-const PORT = process.env.PORT || 5000;
+const PORT = process.env.PORT || 10000;
 
 const server = http.createServer(app);
 const wss = new WebSocket.Server({ server });
 
 // WebSocket state
-let currentFoodLevel = 50;
+let currentFoodLevel = 0;
 let autoRefillEnabled = false;
 
 // WebSocket connection handling
-wss.on("connection", (ws) => {
+wss.on("connection", async (ws) => {
   console.log("Client connected");
 
-  // Send current state to new client
-  ws.send(
-    JSON.stringify({
-      level: currentFoodLevel,
-      autoRefill: autoRefillEnabled,
-    })
-  );
+  try {
+    // Get current agendamentos from database
+    const agendamentos = await Agendamento.find({}).sort({ id: 1 });
+
+    // Send current state including agendamentos to new client
+    ws.send(
+      JSON.stringify({
+        level: currentFoodLevel,
+        autoRefill: autoRefillEnabled,
+        agendamentos: agendamentos, // Send all agendamentos on first connection
+      })
+    );
+  } catch (error) {
+    console.error("Error fetching agendamentos for new connection:", error);
+    // Send without agendamentos if there's an error
+    ws.send(
+      JSON.stringify({
+        level: currentFoodLevel,
+        autoRefill: autoRefillEnabled,
+        agendamentos: [],
+      })
+    );
+  }
 
   ws.on("message", (message) => {
     try {
@@ -49,6 +65,28 @@ wss.on("connection", (ws) => {
         console.log("Food dispense command received");
         currentFoodLevel = Math.min(currentFoodLevel + 20, 100);
         broadcastFoodLevel();
+
+        // Broadcast "Despejar comida" message to all clients
+        broadcastMessage({
+          type: "dispenseFood",
+          message: "Despejar comida",
+          timestamp: new Date().toISOString(),
+        });
+      }
+
+      // Handle agendamentos data sent from frontend
+      if (data.agendamentos && Array.isArray(data.agendamentos)) {
+        console.log(
+          "Agendamentos data received via WebSocket:",
+          data.agendamentos
+        );
+
+        // Broadcast the agendamentos to all connected clients
+        broadcastMessage({
+          type: "agendamentosUpdate",
+          agendamentos: data.agendamentos,
+          timestamp: new Date().toISOString(),
+        });
       }
     } catch (err) {
       console.error("Error parsing message:", err);
@@ -77,6 +115,16 @@ function broadcastFoodLevel() {
   });
 }
 
+function broadcastMessage(messageData) {
+  const message = JSON.stringify(messageData);
+
+  wss.clients.forEach((client) => {
+    if (client.readyState === WebSocket.OPEN) {
+      client.send(message);
+    }
+  });
+}
+
 // Middleware
 app.use(
   cors({
@@ -94,11 +142,15 @@ async function connectDB() {
     await mongoose.connect(uri, {
       useNewUrlParser: true,
       useUnifiedTopology: true,
+      serverSelectionTimeoutMS: 5000, // Render has timeout limits
+      socketTimeoutMS: 45000,
     });
     console.log("Connected to MongoDB");
   } catch (error) {
     console.error("MongoDB connection error:", error);
-    process.exit(1);
+    // Don't exit process on Render, let it retry
+    console.log("Retrying connection in 5 seconds...");
+    setTimeout(connectDB, 5000);
   }
 }
 
@@ -118,10 +170,6 @@ const agendamentoSchema = new mongoose.Schema(
     hasAutomatico: {
       type: Boolean,
       required: true,
-    },
-    peso: {
-      type: String,
-      required: false,
     },
     enabled: {
       type: Boolean,
@@ -179,7 +227,7 @@ app.post("/api/salvarAgendamento", async (req, res) => {
     });
 
     for (const agendamento of agendamentos) {
-      const { id, hora, hasAutomatico, peso, enabled } = agendamento;
+      const { id, hora, hasAutomatico, enabled } = agendamento;
 
       if (!id || !hora || typeof hasAutomatico !== "boolean") {
         return res.status(400).json({ erro: "Dados inválidos" });
@@ -187,12 +235,19 @@ app.post("/api/salvarAgendamento", async (req, res) => {
 
       const updatedAgendamento = await Agendamento.findOneAndUpdate(
         { id },
-        { hora, hasAutomatico, peso, enabled },
+        { hora, hasAutomatico, enabled },
         { new: true, upsert: true }
       );
 
       results.push(updatedAgendamento);
     }
+
+    // Broadcast the saved agendamentos to all connected WebSocket clients
+    broadcastMessage({
+      type: "agendamentosUpdate",
+      agendamentos: results,
+      timestamp: new Date().toISOString(),
+    });
 
     res.status(200).json(results);
   } catch (error) {
@@ -237,6 +292,13 @@ app.post("/api/dispenseFood", (req, res) => {
 
   currentFoodLevel = Math.min(currentFoodLevel + amount, 100);
   broadcastFoodLevel();
+
+  // Broadcast "Despejar comida" message to all clients when using REST API
+  broadcastMessage({
+    type: "dispenseFood",
+    message: "Despejar comida",
+    timestamp: new Date().toISOString(),
+  });
 
   res.status(200).json({
     success: true,
