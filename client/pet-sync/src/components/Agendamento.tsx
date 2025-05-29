@@ -320,20 +320,28 @@ function Agendamento() {
                           setTimePickerOpen(open ? time.id : null)
                         }
                       >
-                        <PopoverTrigger asChild>
+                        <PopoverTrigger>
                           <Button
+                            type="button"
                             variant="outline"
                             className={cn(
-                              "w-28 justify-start text-left font-mono font-medium",
-                              !time.time && "text-gray-400"
+                              "w-[140px] justify-start text-left font-normal",
+                              !time.time && "text-muted-foreground"
                             )}
                             disabled={autoRefill}
                           >
-                            {time.time || "Horário"}
-                            <Clock className="ml-auto h-4 w-4 opacity-50" />
+                            <Clock className="mr-2 h-4 w-4" />
+                            {time.time || "Selecionar"}
                           </Button>
                         </PopoverTrigger>
-                        <PopoverContent className="w-auto p-0" align="start">
+                        <PopoverContent
+                          className="p-0 w-[240px]"
+                          side="bottom"
+                          sideOffset={4}
+                          align="start"
+                          alignOffset={-50}
+                          avoidCollisions={true}
+                        >
                           <div className="grid grid-cols-4 gap-2 p-2 max-h-80 overflow-y-auto">
                             {timeOptions.map((option) => {
                               const isUsed =
@@ -362,47 +370,12 @@ function Agendamento() {
                               );
                             })}
                           </div>
-                          <div className="border-t pt-2 px-2 pb-2">
-                            <div className="font-medium text-sm mb-2 text-gray-500">
-                              Common times
-                            </div>
-                            <div className="flex flex-wrap gap-2">
-                              {["08:00", "12:00", "18:00", "21:00"].map(
-                                (quickTime) => {
-                                  const isUsed =
-                                    usedTimes.includes(quickTime) &&
-                                    time.time !== quickTime;
-                                  return (
-                                    <Button
-                                      key={quickTime}
-                                      variant={
-                                        time.time === quickTime
-                                          ? "default"
-                                          : "outline"
-                                      }
-                                      size="sm"
-                                      className={cn(
-                                        isUsed &&
-                                          "opacity-50 cursor-not-allowed"
-                                      )}
-                                      onClick={() =>
-                                        updateTime(time.id, "time", quickTime)
-                                      }
-                                      disabled={isUsed}
-                                    >
-                                      {quickTime}
-                                    </Button>
-                                  );
-                                }
-                              )}
-                            </div>
-                          </div>
                         </PopoverContent>
                       </Popover>
                     </div>
-                    <div className="ml-4 flex items-center space-x-8">
+                    <div className="hidden md:flex ml-4 items-center space-x-6">
                       <Cat />
-                      <Dog />
+                      <Dog className="mr-4" />
                     </div>
                   </div>
 
