@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { Button } from "@/components/ui/button";
+import { Progress } from "@/components/ui/progress";
 import { Engine, Body } from "matter-js";
 import { UtensilsCrossed } from "lucide-react";
 
@@ -255,13 +256,16 @@ const FoodBowl = () => {
         />
 
         {/* Container Label */}
-        <div className="absolute -top-4 left-1/2 transform -translate-x-1/2 bg-white px-4 py-2 rounded-lg text-lg font-bold text-gray-700 shadow-lg border-2 border-gray-300">
-          Pote de Ração
-        </div>
-
-        {/* Food Level Indicator */}
-        <div className="absolute top-4 right-4 bg-white px-3 py-2 rounded-lg text-lg font-bold text-gray-700 shadow-lg border-2 border-gray-300">
-          {foodLevel}%
+        <div className="absolute -top-4 left-1/2 transform -translate-x-1/2 flex flex-col items-center gap-2">
+          <div className="bg-white px-4 py-2 rounded-lg text-lg font-bold text-gray-700 shadow-lg border-2 border-gray-300">
+            Pote de Ração
+          </div>
+          <div className="bg-white/90 backdrop-blur-sm px-4 py-2 rounded-lg shadow-lg border-2 border-gray-300 flex items-center gap-4 min-w-[200px]">
+            <Progress value={foodLevel} className="flex-1" />
+            <span className="text-lg font-bold text-gray-700 min-w-[3ch] text-right">
+              {foodLevel}%
+            </span>
+          </div>
         </div>
       </div>
 
