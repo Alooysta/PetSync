@@ -115,10 +115,7 @@ wss.on("connection", async (ws) => {
 
         // Broadcast "Encher pote" message to all clients
         broadcastMessage({
-          type: "fillBowl",
-          message: "Pote cheio - 200g",
-          grams: currentFoodGrams,
-          timestamp: new Date().toISOString(),
+          gramas: currentFoodGrams,
         });
       }
 
@@ -297,11 +294,9 @@ app.post("/api/setFoodGrams", (req, res) => {
   const { grams } = req.body;
 
   if (typeof grams !== "number" || grams < 0 || grams > MAX_FOOD_GRAMS) {
-    return res
-      .status(400)
-      .json({
-        error: `Invalid food grams. Must be a number between 0-${MAX_FOOD_GRAMS}`,
-      });
+    return res.status(400).json({
+      error: `Invalid food grams. Must be a number between 0-${MAX_FOOD_GRAMS}`,
+    });
   }
 
   currentFoodGrams = grams;
@@ -320,11 +315,9 @@ app.post("/api/setFoodLevel", (req, res) => {
 
   if (grams !== undefined) {
     if (typeof grams !== "number" || grams < 0 || grams > MAX_FOOD_GRAMS) {
-      return res
-        .status(400)
-        .json({
-          error: `Invalid food grams. Must be a number between 0-${MAX_FOOD_GRAMS}`,
-        });
+      return res.status(400).json({
+        error: `Invalid food grams. Must be a number between 0-${MAX_FOOD_GRAMS}`,
+      });
     }
     currentFoodGrams = grams;
   } else if (level !== undefined) {
