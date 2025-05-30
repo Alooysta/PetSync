@@ -150,15 +150,16 @@ wss.on("connection", async (ws) => {
         });
       }
 
-      // Handle direct weight updates (like "20 gramas")
-      if (data.weight !== undefined) {
-        const newGrams = parseFoodLevel(data.weight);
+      // Handle direct gramas updates - the ONLY way to update food weight
+      if (data.gramas !== undefined) {
+        const newGrams =
+          typeof data.gramas === "number" ? data.gramas : parseInt(data.gramas);
         if (!isNaN(newGrams) && newGrams >= 0 && newGrams <= MAX_FOOD_GRAMS) {
           currentFoodGrams = newGrams;
           broadcastFoodLevel();
 
           broadcastMessage({
-            type: "weightUpdate",
+            type: "gramasUpdate",
             message: `Peso atualizado - ${currentFoodGrams}g`,
             grams: currentFoodGrams,
             timestamp: new Date().toISOString(),

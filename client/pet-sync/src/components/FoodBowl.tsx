@@ -30,7 +30,6 @@ const FoodBowl = () => {
   };
 
   // Function to parse food level from various formats
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const parseFoodLevel = (data: any) => {
     if (typeof data === "string") {
       // Handle "20 gramas" format
@@ -205,7 +204,7 @@ const FoodBowl = () => {
 
         // Main ball
         ctx.beginPath();
-        ctx.arc(0, 0, 24, 0, 2 * Math.PI);
+        ctx.arc(0, 0, 18, 0, 2 * Math.PI); // Smaller radius to match physics body
         ctx.fillStyle = "#D97706";
         ctx.fill();
         ctx.strokeStyle = "#92400E";
@@ -214,7 +213,7 @@ const FoodBowl = () => {
 
         // Draw pet icon instead of highlight
         const iconType = ballIconsRef.current.get(ball) || "dog";
-        drawPetIcon(ctx, iconType, 0, 0, 20);
+        drawPetIcon(ctx, iconType, 0, 0, 16); // Smaller icon size
 
         ctx.restore();
       });
@@ -239,8 +238,9 @@ const FoodBowl = () => {
   useEffect(() => {
     if (!Matter || !engineRef.current) return;
 
-    // Each ball represents 10 grams (200g / 20 balls max)
-    const targetBallCount = Math.floor(foodGrams / 10);
+    // Each ball represents 4 grams (200g / 50 balls max)
+    // This ensures the bowl gets filled to the top when at 200g
+    const targetBallCount = Math.floor(foodGrams / 4);
     const currentBallCount = ballsRef.current.length;
 
     if (targetBallCount > currentBallCount) {
@@ -249,9 +249,9 @@ const FoodBowl = () => {
       for (let i = 0; i < ballsToAdd; i++) {
         setTimeout(() => {
           const ball = Matter.Bodies.circle(
-            Math.random() * (containerWidth - 60) + 30, // Random x position
+            Math.random() * (containerWidth - 80) + 40, // Random x position with more margin
             -20, // Start above the container
-            24, // Radius
+            18, // Smaller radius (was 24)
             {
               restitution: 0.6,
               friction: 0.3,
@@ -266,7 +266,7 @@ const FoodBowl = () => {
           if (engineRef.current) {
             Matter.World.add(engineRef.current.world, ball);
           }
-        }, i * 200); // Stagger the ball drops
+        }, i * 150); // Faster stagger for more balls
       }
     } else if (targetBallCount < currentBallCount) {
       // Remove balls
