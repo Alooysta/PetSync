@@ -11,12 +11,51 @@ const FoodBowl = () => {
   const ballsRef = useRef<Body[]>([]);
   const ballIconsRef = useRef<Map<Body, "dog" | "cat">>(new Map());
   const [Matter, setMatter] = useState<typeof import("matter-js")>();
-  const [foodLevel, setFoodLevel] = useState(0);
+  const [foodGrams, setFoodGrams] = useState(0); // Now storing in grams
   const [socket, setSocket] = useState<WebSocket | null>(null);
 
-  // Container dimensions
+  // Constants
+  const MAX_FOOD_GRAMS = 200; // 100% = 200 grams
   const containerWidth = 320;
   const containerHeight = 600;
+
+  // Helper function to convert grams to percentage
+  const gramsToPercentage = (grams: number) => {
+    return Math.round((grams / MAX_FOOD_GRAMS) * 100);
+  };
+
+  // Helper function to convert percentage to grams
+  const percentageToGrams = (percentage: number) => {
+    return Math.round((percentage / 100) * MAX_FOOD_GRAMS);
+  };
+
+  // Function to parse food level from various formats
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const parseFoodLevel = (data: any) => {
+    if (typeof data === "string") {
+      // Handle "20 gramas" format
+      const gramsMatch = data.match(/(\d+)\s*gramas?/i);
+      if (gramsMatch) {
+        return parseInt(gramsMatch[1]);
+      }
+
+      // Handle plain number as string
+      const num = parseInt(data);
+      if (!isNaN(num)) {
+        // If it's a reasonable gram amount (0-200), treat as grams
+        // If it's 0-100, treat as percentage for backward compatibility
+        return num <= 100 ? percentageToGrams(num) : num;
+      }
+    }
+
+    if (typeof data === "number") {
+      // If it's a reasonable gram amount (0-200), treat as grams
+      // If it's 0-100, treat as percentage for backward compatibility
+      return data <= 100 ? percentageToGrams(data) : data;
+    }
+
+    return 0;
+  };
 
   // Function to get random pet icon
   const getRandomPetIcon = () => {
@@ -66,8 +105,15 @@ const FoodBowl = () => {
     newSocket.addEventListener("message", (event) => {
       try {
         const data = JSON.parse(event.data);
+
         if (data.level !== undefined) {
-          setFoodLevel(data.level);
+          const grams = parseFoodLevel(data.level);
+          setFoodGrams(Math.min(Math.max(grams, 0), MAX_FOOD_GRAMS));
+        }
+
+        if (data.grams !== undefined) {
+          const grams = parseFoodLevel(data.grams);
+          setFoodGrams(Math.min(Math.max(grams, 0), MAX_FOOD_GRAMS));
         }
       } catch (error) {
         console.error("Error parsing WebSocket message:", error);
@@ -189,11 +235,12 @@ const FoodBowl = () => {
     };
   }, [Matter]);
 
-  // Update food balls based on food level
+  // Update food balls based on food level in grams
   useEffect(() => {
     if (!Matter || !engineRef.current) return;
 
-    const targetBallCount = Math.floor(foodLevel / 2); // Each ball represents 5%
+    // Each ball represents 10 grams (200g / 20 balls max)
+    const targetBallCount = Math.floor(foodGrams / 10);
     const currentBallCount = ballsRef.current.length;
 
     if (targetBallCount > currentBallCount) {
@@ -233,16 +280,22 @@ const FoodBowl = () => {
         }
       }
     }
-  }, [foodLevel, Matter]);
+  }, [foodGrams, Matter]);
 
   const dispenseFoodHandler = () => {
     if (socket && socket.readyState === WebSocket.OPEN) {
-      socket.send(JSON.stringify({ action: "dispenseFood" }));
+      // Send message to fill to maximum (200 grams)
+      socket.send(
+        JSON.stringify({ action: "fillBowl", grams: MAX_FOOD_GRAMS })
+      );
     } else {
       console.warn("WebSocket not connected, cannot dispense food");
-      setFoodLevel((prev) => Math.min(prev + 20, 100));
+      // Fallback: set to maximum food level locally
+      setFoodGrams(MAX_FOOD_GRAMS);
     }
   };
+
+  const currentPercentage = gramsToPercentage(foodGrams);
 
   return (
     <div className="flex flex-col items-center space-y-6 p-6 sm:p-8">
@@ -260,11 +313,16 @@ const FoodBowl = () => {
           <div className="bg-white px-4 py-2 rounded-lg text-lg font-bold text-gray-700 shadow-lg border-2 border-gray-300">
             Pote de Ração
           </div>
-          <div className="bg-white/90 backdrop-blur-sm px-4 py-2 rounded-lg shadow-lg border-2 border-gray-300 flex items-center gap-4 min-w-[200px]">
-            <Progress value={foodLevel} className="flex-1" />
-            <span className="text-lg font-bold text-gray-700 min-w-[3ch] text-right">
-              {foodLevel}%
-            </span>
+          <div className="bg-white/90 backdrop-blur-sm px-4 py-2 rounded-lg shadow-lg border-2 border-gray-300 flex items-center gap-4 min-w-[240px]">
+            <Progress value={currentPercentage} className="flex-1" />
+            <div className="flex flex-col items-end">
+              <span className="text-lg font-bold text-gray-700">
+                {foodGrams}g
+              </span>
+              <span className="text-sm text-gray-500">
+                {currentPercentage}%
+              </span>
+            </div>
           </div>
         </div>
       </div>
@@ -276,7 +334,7 @@ const FoodBowl = () => {
         size="lg"
       >
         <UtensilsCrossed className="mr-3 h-6 w-6" />
-        Despejar Comida
+        Encher Pote (200g)
       </Button>
     </div>
   );

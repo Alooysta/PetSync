@@ -11,32 +11,68 @@ const PORT = process.env.PORT || 10000;
 const server = http.createServer(app);
 const wss = new WebSocket.Server({ server });
 
-// WebSocket state
-let currentFoodLevel = 0;
+// Constants
+const MAX_FOOD_GRAMS = 200; // 100% = 200 grams
+
+let currentFoodGrams = 0; // Now storing in grams instead of percentage
 let autoRefillEnabled = false;
 
-// WebSocket connection handling
+// Helper functions
+const gramsToPercentage = (grams) => {
+  return Math.round((grams / MAX_FOOD_GRAMS) * 100);
+};
+
+const percentageToGrams = (percentage) => {
+  return Math.round((percentage / 100) * MAX_FOOD_GRAMS);
+};
+
+// Function to parse food level from various formats
+const parseFoodLevel = (data) => {
+  if (typeof data === "string") {
+    // Handle "20 gramas" format
+    const gramsMatch = data.match(/(\d+)\s*gramas?/i);
+    if (gramsMatch) {
+      return parseInt(gramsMatch[1]);
+    }
+
+    // Handle plain number as string
+    const num = parseInt(data);
+    if (!isNaN(num)) {
+      // If it's a reasonable gram amount (0-200), treat as grams
+      // If it's 0-100, treat as percentage for backward compatibility
+      return num <= 100 ? percentageToGrams(num) : num;
+    }
+  }
+
+  if (typeof data === "number") {
+    // If it's a reasonable gram amount (0-200), treat as grams
+    // If it's 0-100, treat as percentage for backward compatibility
+    return data <= 100 ? percentageToGrams(data) : data;
+  }
+
+  return 0;
+};
+
 wss.on("connection", async (ws) => {
-  console.log("Client connected");
+  console.log("Cliente conectado");
 
   try {
-    // Get current agendamentos from database
     const agendamentos = await Agendamento.find({}).sort({ id: 1 });
 
-    // Send current state including agendamentos to new client
     ws.send(
       JSON.stringify({
-        level: currentFoodLevel,
+        level: gramsToPercentage(currentFoodGrams), // Send percentage for backward compatibility
+        grams: currentFoodGrams, // Send grams as new field
         autoRefill: autoRefillEnabled,
-        agendamentos: agendamentos, // Send all agendamentos on first connection
+        agendamentos: agendamentos,
       })
     );
   } catch (error) {
-    console.error("Error fetching agendamentos for new connection:", error);
-    // Send without agendamentos if there's an error
+    console.error("Erro encontrado:", error);
     ws.send(
       JSON.stringify({
-        level: currentFoodLevel,
+        level: gramsToPercentage(currentFoodGrams),
+        grams: currentFoodGrams,
         autoRefill: autoRefillEnabled,
         agendamentos: [],
       })
@@ -48,10 +84,20 @@ wss.on("connection", async (ws) => {
       const data = JSON.parse(message.toString());
       console.log("Received message:", data);
 
-      if (data.level !== undefined) {
-        const newLevel = parseInt(data.level);
-        if (!isNaN(newLevel) && newLevel >= 0 && newLevel <= 100) {
-          currentFoodLevel = newLevel;
+      // Handle gram-based level setting
+      if (data.grams !== undefined) {
+        const newGrams = parseFoodLevel(data.grams);
+        if (!isNaN(newGrams) && newGrams >= 0 && newGrams <= MAX_FOOD_GRAMS) {
+          currentFoodGrams = newGrams;
+          broadcastFoodLevel();
+        }
+      }
+
+      // Handle percentage-based level setting (backward compatibility)
+      if (data.level !== undefined && data.grams === undefined) {
+        const newGrams = parseFoodLevel(data.level);
+        if (!isNaN(newGrams) && newGrams >= 0 && newGrams <= MAX_FOOD_GRAMS) {
+          currentFoodGrams = newGrams;
           broadcastFoodLevel();
         }
       }
@@ -61,15 +107,33 @@ wss.on("connection", async (ws) => {
         broadcastFoodLevel();
       }
 
-      if (data.action === "dispenseFood") {
-        console.log("Food dispense command received");
-        currentFoodLevel = Math.min(currentFoodLevel + 20, 100);
+      // Handle fill bowl action (sets to 200g)
+      if (data.action === "fillBowl") {
+        console.log("Fill bowl command received");
+        currentFoodGrams = MAX_FOOD_GRAMS;
         broadcastFoodLevel();
 
-        // Broadcast "Despejar comida" message to all clients
+        // Broadcast "Encher pote" message to all clients
+        broadcastMessage({
+          type: "fillBowl",
+          message: "Pote cheio - 200g",
+          grams: currentFoodGrams,
+          timestamp: new Date().toISOString(),
+        });
+      }
+
+      // Handle legacy dispense food action
+      if (data.action === "dispenseFood") {
+        console.log("Legacy food dispense command received");
+        // For legacy compatibility, add some food but don't fill completely
+        currentFoodGrams = Math.min(currentFoodGrams + 40, MAX_FOOD_GRAMS); // Add 40g (20% of 200g)
+        broadcastFoodLevel();
+
+        // Broadcast message to all clients
         broadcastMessage({
           type: "dispenseFood",
-          message: "Despejar comida",
+          message: `Comida adicionada - ${currentFoodGrams}g`,
+          grams: currentFoodGrams,
           timestamp: new Date().toISOString(),
         });
       }
@@ -88,6 +152,22 @@ wss.on("connection", async (ws) => {
           timestamp: new Date().toISOString(),
         });
       }
+
+      // Handle direct weight updates (like "20 gramas")
+      if (data.weight !== undefined) {
+        const newGrams = parseFoodLevel(data.weight);
+        if (!isNaN(newGrams) && newGrams >= 0 && newGrams <= MAX_FOOD_GRAMS) {
+          currentFoodGrams = newGrams;
+          broadcastFoodLevel();
+
+          broadcastMessage({
+            type: "weightUpdate",
+            message: `Peso atualizado - ${currentFoodGrams}g`,
+            grams: currentFoodGrams,
+            timestamp: new Date().toISOString(),
+          });
+        }
+      }
     } catch (err) {
       console.error("Error parsing message:", err);
     }
@@ -104,7 +184,8 @@ wss.on("connection", async (ws) => {
 
 function broadcastFoodLevel() {
   const message = JSON.stringify({
-    level: currentFoodLevel,
+    level: gramsToPercentage(currentFoodGrams), // Send percentage for backward compatibility
+    grams: currentFoodGrams, // Send grams as new field
     autoRefill: autoRefillEnabled,
   });
 
@@ -154,7 +235,6 @@ async function connectDB() {
   }
 }
 
-// MongoDB Schema
 const agendamentoSchema = new mongoose.Schema(
   {
     id: {
@@ -182,17 +262,20 @@ const agendamentoSchema = new mongoose.Schema(
 
 const Agendamento = mongoose.model("Agendamento", agendamentoSchema);
 
-// Routes
 app.get("/", (req, res) => {
   res.json({
-    message: "Pet Feeder API is running!",
-    websocket: "Available",
+    message: "Pet Feeder está rodando!",
+    websocket: "Disponível",
+    currentFood: `${currentFoodGrams}g (${gramsToPercentage(
+      currentFoodGrams
+    )}%)`,
     endpoints: [
-      "GET /api/teste",
       "GET /api/listaAgendamentos",
       "POST /api/salvarAgendamento",
       "POST /api/setFoodLevel",
+      "POST /api/setFoodGrams",
       "GET /api/getFoodLevel",
+      "POST /api/fillBowl",
     ],
   });
 });
@@ -203,8 +286,128 @@ app.get("/api/teste", (req, res) => {
 
 app.get("/api/getFoodLevel", (req, res) => {
   res.json({
-    level: currentFoodLevel,
+    level: gramsToPercentage(currentFoodGrams), // Percentage for backward compatibility
+    grams: currentFoodGrams, // Grams as new field
     autoRefill: autoRefillEnabled,
+  });
+});
+
+// New endpoint to set food level in grams
+app.post("/api/setFoodGrams", (req, res) => {
+  const { grams } = req.body;
+
+  if (typeof grams !== "number" || grams < 0 || grams > MAX_FOOD_GRAMS) {
+    return res
+      .status(400)
+      .json({
+        error: `Invalid food grams. Must be a number between 0-${MAX_FOOD_GRAMS}`,
+      });
+  }
+
+  currentFoodGrams = grams;
+  broadcastFoodLevel();
+
+  res.status(200).json({
+    success: true,
+    grams: currentFoodGrams,
+    level: gramsToPercentage(currentFoodGrams),
+  });
+});
+
+// Updated endpoint to handle both percentage and grams
+app.post("/api/setFoodLevel", (req, res) => {
+  const { level, grams } = req.body;
+
+  if (grams !== undefined) {
+    if (typeof grams !== "number" || grams < 0 || grams > MAX_FOOD_GRAMS) {
+      return res
+        .status(400)
+        .json({
+          error: `Invalid food grams. Must be a number between 0-${MAX_FOOD_GRAMS}`,
+        });
+    }
+    currentFoodGrams = grams;
+  } else if (level !== undefined) {
+    if (typeof level !== "number" || level < 0 || level > 100) {
+      return res
+        .status(400)
+        .json({ error: "Invalid food level. Must be a number between 0-100" });
+    }
+    currentFoodGrams = percentageToGrams(level);
+  } else {
+    return res
+      .status(400)
+      .json({ error: "Must provide either 'level' or 'grams'" });
+  }
+
+  broadcastFoodLevel();
+
+  res.status(200).json({
+    success: true,
+    grams: currentFoodGrams,
+    level: gramsToPercentage(currentFoodGrams),
+  });
+});
+
+// New endpoint to fill bowl to maximum (200g)
+app.post("/api/fillBowl", (req, res) => {
+  currentFoodGrams = MAX_FOOD_GRAMS;
+  broadcastFoodLevel();
+
+  // Broadcast "Fill bowl" message to all clients
+  broadcastMessage({
+    type: "fillBowl",
+    message: "Pote cheio - 200g",
+    grams: currentFoodGrams,
+    timestamp: new Date().toISOString(),
+  });
+
+  res.status(200).json({
+    success: true,
+    grams: currentFoodGrams,
+    level: gramsToPercentage(currentFoodGrams),
+    message: "Bowl filled to maximum capacity",
+  });
+});
+
+app.post("/api/dispenseFood", (req, res) => {
+  const { amount = 40, grams } = req.body; // Default 40g instead of 20%
+
+  let amountToAdd;
+  if (grams !== undefined) {
+    if (typeof grams !== "number" || grams < 0 || grams > MAX_FOOD_GRAMS) {
+      return res.status(400).json({
+        error: `Invalid grams amount. Must be a number between 0-${MAX_FOOD_GRAMS}`,
+      });
+    }
+    amountToAdd = grams;
+  } else {
+    // Handle legacy percentage-based amount
+    if (typeof amount !== "number" || amount < 0 || amount > 100) {
+      return res.status(400).json({
+        error: "Invalid amount. Must be a number between 0-100",
+      });
+    }
+    amountToAdd = amount <= 100 ? percentageToGrams(amount) : amount;
+  }
+
+  currentFoodGrams = Math.min(currentFoodGrams + amountToAdd, MAX_FOOD_GRAMS);
+  broadcastFoodLevel();
+
+  // Broadcast message to all clients
+  broadcastMessage({
+    type: "dispenseFood",
+    message: `Comida adicionada - ${currentFoodGrams}g`,
+    grams: currentFoodGrams,
+    dispensed: amountToAdd,
+    timestamp: new Date().toISOString(),
+  });
+
+  res.status(200).json({
+    success: true,
+    grams: currentFoodGrams,
+    level: gramsToPercentage(currentFoodGrams),
+    dispensed: amountToAdd,
   });
 });
 
@@ -266,47 +469,6 @@ app.get("/api/listaAgendamentos", async (req, res) => {
   }
 });
 
-app.post("/api/setFoodLevel", (req, res) => {
-  const { level } = req.body;
-
-  if (typeof level !== "number" || level < 0 || level > 100) {
-    return res
-      .status(400)
-      .json({ error: "Invalid food level. Must be a number between 0-100" });
-  }
-
-  currentFoodLevel = level;
-  broadcastFoodLevel();
-
-  res.status(200).json({ success: true, level: currentFoodLevel });
-});
-
-app.post("/api/dispenseFood", (req, res) => {
-  const { amount = 20 } = req.body;
-
-  if (typeof amount !== "number" || amount < 0 || amount > 100) {
-    return res.status(400).json({
-      error: "Invalid amount. Must be a number between 0-100",
-    });
-  }
-
-  currentFoodLevel = Math.min(currentFoodLevel + amount, 100);
-  broadcastFoodLevel();
-
-  // Broadcast "Despejar comida" message to all clients when using REST API
-  broadcastMessage({
-    type: "dispenseFood",
-    message: "Despejar comida",
-    timestamp: new Date().toISOString(),
-  });
-
-  res.status(200).json({
-    success: true,
-    level: currentFoodLevel,
-    dispensed: amount,
-  });
-});
-
 app.post("/api/setAutoRefill", (req, res) => {
   const { enabled } = req.body;
 
@@ -331,6 +493,9 @@ app.get("/health", (req, res) => {
     status: "healthy",
     timestamp: new Date().toISOString(),
     uptime: process.uptime(),
+    currentFood: `${currentFoodGrams}g (${gramsToPercentage(
+      currentFoodGrams
+    )}%)`,
   });
 });
 
@@ -362,6 +527,7 @@ async function startServer() {
     console.log(`Server running on port ${PORT}`);
     console.log(`WebSocket server is active`);
     console.log(`Environment: ${process.env.NODE_ENV || "development"}`);
+    console.log(`Food system: 100% = ${MAX_FOOD_GRAMS}g`);
   });
 }
 
