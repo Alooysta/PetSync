@@ -151,11 +151,12 @@ wss.on("connection", async (ws) => {
       }
 
       // Handle direct gramas updates - the ONLY way to update food weight
+      // gramas field should always be treated as actual grams, not percentage
       if (data.gramas !== undefined) {
         const newGrams =
           typeof data.gramas === "number" ? data.gramas : parseInt(data.gramas);
         if (!isNaN(newGrams) && newGrams >= 0 && newGrams <= MAX_FOOD_GRAMS) {
-          currentFoodGrams = newGrams;
+          currentFoodGrams = newGrams; // Direct assignment - gramas is the actual weight in grams
           broadcastFoodLevel();
 
           broadcastMessage({
