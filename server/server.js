@@ -84,6 +84,29 @@ wss.on("connection", async (ws) => {
       const data = JSON.parse(message.toString());
       console.log("Received message:", data);
 
+      // Handle direct gramas updates - PRIORITY HANDLER
+      // gramas field should always be treated as actual grams, never percentage
+      if (data.gramas !== undefined) {
+        const newGrams =
+          typeof data.gramas === "number" ? data.gramas : parseInt(data.gramas);
+        if (!isNaN(newGrams) && newGrams >= 0 && newGrams <= MAX_FOOD_GRAMS) {
+          currentFoodGrams = newGrams; // Direct assignment - gramas is actual weight in grams
+          broadcastFoodLevel();
+
+          broadcastMessage({
+            type: "gramasUpdate",
+            message: `Peso atualizado - ${currentFoodGrams}g`,
+            grams: currentFoodGrams,
+            timestamp: new Date().toISOString(),
+          });
+
+          console.log(
+            `Food weight set directly to ${newGrams}g via gramas field`
+          );
+        }
+        return; // Exit early to prevent other handlers from interfering
+      }
+
       // Handle gram-based level setting
       if (data.grams !== undefined) {
         const newGrams = parseFoodLevel(data.grams);
@@ -148,24 +171,6 @@ wss.on("connection", async (ws) => {
           agendamentos: data.agendamentos,
           timestamp: new Date().toISOString(),
         });
-      }
-
-      // Handle direct gramas updates - the ONLY way to update food weight
-      // gramas field should always be treated as actual grams, not percentage
-      if (data.gramas !== undefined) {
-        const newGrams =
-          typeof data.gramas === "number" ? data.gramas : parseInt(data.gramas);
-        if (!isNaN(newGrams) && newGrams >= 0 && newGrams <= MAX_FOOD_GRAMS) {
-          currentFoodGrams = newGrams; // Direct assignment - gramas is the actual weight in grams
-          broadcastFoodLevel();
-
-          broadcastMessage({
-            type: "gramasUpdate",
-            message: `Peso atualizado - ${currentFoodGrams}g`,
-            grams: currentFoodGrams,
-            timestamp: new Date().toISOString(),
-          });
-        }
       }
     } catch (err) {
       console.error("Error parsing message:", err);
