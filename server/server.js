@@ -86,9 +86,9 @@ wss.on("connection", async (ws) => {
 
       // Handle direct gramas updates - PRIORITY HANDLER
       if (data.gramas !== undefined) {
-        const newGrams = parseFoodLevel(data.gramas);
-        if (newGrams >= 0 && newGrams <= MAX_FOOD_GRAMS) {
-          currentFoodGrams = newGrams;
+        const newGrams = Number(data.gramas); // Direct number conversion, no parsing logic
+        if (!isNaN(newGrams) && newGrams >= 0 && newGrams <= MAX_FOOD_GRAMS) {
+          currentFoodGrams = newGrams; // Direct assignment of grams
           broadcastFoodLevel();
 
           broadcastMessage({
