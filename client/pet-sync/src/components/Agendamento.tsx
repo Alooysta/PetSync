@@ -431,7 +431,7 @@ function Agendamento() {
           <div className="text-sm text-gray-500 w-full sm:w-auto text-center sm:text-left">
             {autoRefill ? (
               <span className="font-medium text-green-600">
-                Auto refill mode active
+                Reposição automática ativada
               </span>
             ) : (
               <span>
