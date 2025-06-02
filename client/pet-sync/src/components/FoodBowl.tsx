@@ -105,13 +105,13 @@ const FoodBowl = () => {
       try {
         const data = JSON.parse(event.data);
 
-        if (data.level !== undefined) {
-          const grams = parseFoodLevel(data.level);
-          setFoodGrams(Math.min(Math.max(grams, 0), MAX_FOOD_GRAMS));
-        }
-
+        // Handle direct grams updates first
         if (data.grams !== undefined) {
-          const grams = parseFoodLevel(data.grams);
+          setFoodGrams(Math.min(Math.max(data.grams, 0), MAX_FOOD_GRAMS));
+        }
+        // Fall back to percentage-based level if no grams
+        else if (data.level !== undefined) {
+          const grams = percentageToGrams(data.level);
           setFoodGrams(Math.min(Math.max(grams, 0), MAX_FOOD_GRAMS));
         }
       } catch (error) {
