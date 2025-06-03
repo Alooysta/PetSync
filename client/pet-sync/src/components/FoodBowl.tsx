@@ -30,31 +30,31 @@ const FoodBowl = () => {
   };
 
   // Function to parse food level from various formats
-  const parseFoodLevel = (data: any) => {
-    if (typeof data === "string") {
-      // Handle "20 gramas" format
-      const gramsMatch = data.match(/(\d+)\s*gramas?/i);
-      if (gramsMatch) {
-        return parseInt(gramsMatch[1]);
-      }
+  // const parseFoodLevel = (data: any) => {
+  //   if (typeof data === "string") {
+  //     // Handle "20 gramas" format
+  //     const gramsMatch = data.match(/(\d+)\s*gramas?/i);
+  //     if (gramsMatch) {
+  //       return parseInt(gramsMatch[1]);
+  //     }
 
-      // Handle plain number as string
-      const num = parseInt(data);
-      if (!isNaN(num)) {
-        // If it's a reasonable gram amount (0-200), treat as grams
-        // If it's 0-100, treat as percentage for backward compatibility
-        return num <= 100 ? percentageToGrams(num) : num;
-      }
-    }
+  //     // Handle plain number as string
+  //     const num = parseInt(data);
+  //     if (!isNaN(num)) {
+  //       // If it's a reasonable gram amount (0-200), treat as grams
+  //       // If it's 0-100, treat as percentage for backward compatibility
+  //       return num <= 100 ? percentageToGrams(num) : num;
+  //     }
+  //   }
 
-    if (typeof data === "number") {
-      // If it's a reasonable gram amount (0-200), treat as grams
-      // If it's 0-100, treat as percentage for backward compatibility
-      return data <= 100 ? percentageToGrams(data) : data;
-    }
+  //   if (typeof data === "number") {
+  //     // If it's a reasonable gram amount (0-200), treat as grams
+  //     // If it's 0-100, treat as percentage for backward compatibility
+  //     return data <= 100 ? percentageToGrams(data) : data;
+  //   }
 
-    return 0;
-  };
+  //   return 0;
+  // };
 
   // Function to get random pet icon
   const getRandomPetIcon = () => {
