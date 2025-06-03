@@ -6,7 +6,7 @@ import Agendamento from './components/Agendamento.tsx';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
-import { Cat, Dog, PawPrint } from 'lucide-react';
+import { Cat, Dog } from 'lucide-react';
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
