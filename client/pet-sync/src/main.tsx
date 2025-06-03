@@ -1,14 +1,14 @@
-import { StrictMode } from "react";
-import { createRoot } from "react-dom/client";
-import "./index.css";
-import Agendamento from "./components/Agendamento.tsx";
-import FoodBowl from "./components/FoodBowl.tsx";
-import { Card, CardContent } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { Separator } from "@/components/ui/separator";
-import { Cat, Dog, PawPrint } from "lucide-react";
+import { StrictMode } from 'react';
+import { createRoot } from 'react-dom/client';
+import './index.css';
+import Agendamento from './components/Agendamento.tsx';
+// import FoodBowl from './components/FoodBowl.tsx';
+import { Card, CardContent } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
+import { Separator } from '@/components/ui/separator';
+import { Cat, Dog, PawPrint } from 'lucide-react';
 
-createRoot(document.getElementById("root")!).render(
+createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-100 dark:from-slate-900 dark:via-slate-800 dark:to-slate-900">
       <header className="sticky top-0 z-50 w-full border-b border-slate-200/50 bg-white/80 backdrop-blur-xl dark:border-slate-800/50 dark:bg-slate-900/80">
@@ -75,40 +75,44 @@ createRoot(document.getElementById("root")!).render(
       </section>
 
       <main className="container mx-auto px-6 py-12">
-        <div className="grid grid-cols-1 xl:grid-cols-2 gap-8 max-w-7xl mx-auto">
-          <Card className="group hover:shadow-2xl transition-all duration-500 border-0 shadow-xl bg-white/60 backdrop-blur-sm dark:bg-slate-800/60">
-            <CardContent className="p-8">
-              <div className="flex items-center space-x-3 mb-6">
-                <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-gradient-to-br from-green-500 to-emerald-600 text-white shadow-lg group-hover:scale-110 transition-transform duration-300">
-                  <svg
-                    className="h-6 w-6"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"
-                    />
-                  </svg>
+        <div className="flex justify-center max-w-7xl mx-auto">
+          <div className="w-full max-w-2xl">
+            <Card className="group hover:shadow-2xl transition-all duration-500 border-0 shadow-xl bg-white/60 backdrop-blur-sm dark:bg-slate-800/60">
+              <CardContent className="p-8">
+                <div className="flex items-center space-x-3 mb-6">
+                  <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-gradient-to-br from-green-500 to-emerald-600 text-white shadow-lg group-hover:scale-110 transition-transform duration-300">
+                    <svg
+                      className="h-6 w-6"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"
+                      />
+                    </svg>
+                  </div>
+                  <div>
+                    <h3 className="text-xl font-semibold text-slate-900 dark:text-white">
+                      Agendamento Inteligente
+                    </h3>
+                    <p className="text-slate-500 dark:text-slate-400">
+                      Configure horários ou mantenha o pote cheio
+                      automaticamente
+                    </p>
+                  </div>
                 </div>
-                <div>
-                  <h3 className="text-xl font-semibold text-slate-900 dark:text-white">
-                    Agendamento Inteligente
-                  </h3>
-                  <p className="text-slate-500 dark:text-slate-400">
-                    Configure horários ou mantenha o pote cheio automaticamente
-                  </p>
-                </div>
-              </div>
-              <Separator className="mb-6" />
-              <Agendamento />
-            </CardContent>
-          </Card>
+                <Separator className="mb-6" />
+                <Agendamento />
+              </CardContent>
+            </Card>
+          </div>
 
-          <Card className="group hover:shadow-2xl transition-all duration-500 border-0 shadow-xl bg-white/60 backdrop-blur-sm dark:bg-slate-800/60">
+          {/* Keep the commented FoodBowl card */}
+          {/* <Card className="group hover:shadow-2xl transition-all duration-500 border-0 shadow-xl bg-white/60 backdrop-blur-sm dark:bg-slate-800/60">
             <CardContent className="p-8">
               <div className="flex items-center space-x-3 mb-6">
                 <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-gradient-to-br from-orange-500 to-red-600 text-white shadow-lg group-hover:scale-110 transition-transform duration-300">
@@ -126,7 +130,7 @@ createRoot(document.getElementById("root")!).render(
               <Separator className="mb-6" />
               <FoodBowl />
             </CardContent>
-          </Card>
+          </Card> */}
         </div>
 
         <div className="mt-16">

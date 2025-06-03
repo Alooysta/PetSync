@@ -1,7 +1,7 @@
-import { useState, useEffect } from "react";
-import { Button } from "@/components/ui/button";
-import { Switch } from "@/components/ui/switch";
-import { Label } from "@/components/ui/label";
+import { useState, useEffect } from 'react';
+import { Button } from '@/components/ui/button';
+import { Switch } from '@/components/ui/switch';
+import { Label } from '@/components/ui/label';
 import {
   Card,
   CardContent,
@@ -9,8 +9,8 @@ import {
   CardFooter,
   CardHeader,
   CardTitle,
-} from "@/components/ui/card";
-import { Clock, Plus, Trash2, RefreshCw, Cat, Dog } from "lucide-react";
+} from '@/components/ui/card';
+import { Clock, Plus, Trash2, RefreshCw, Cat, Dog } from 'lucide-react';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -20,20 +20,20 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
+} from '@/components/ui/alert-dialog';
 import {
   Popover,
   PopoverContent,
   PopoverTrigger,
-} from "@/components/ui/popover";
-import { cn } from "@/lib/utils";
+} from '@/components/ui/popover';
+import { cn } from '@/lib/utils';
 
 // Time picker options
 const timeOptions: { value: string; label: string }[] = [];
 for (let hour = 0; hour < 24; hour++) {
-  for (let minute = 0; minute < 60; minute += 15) {
-    const formattedHour = hour.toString().padStart(2, "0");
-    const formattedMinute = minute.toString().padStart(2, "0");
+  for (let minute = 0; minute < 60; minute += 1) {
+    const formattedHour = hour.toString().padStart(2, '0');
+    const formattedMinute = minute.toString().padStart(2, '0');
     timeOptions.push({
       value: `${formattedHour}:${formattedMinute}`,
       label: `${formattedHour}:${formattedMinute}`,
@@ -56,7 +56,7 @@ interface SaveAgendamentoRequest {
 
 function Agendamento() {
   const [times, setTimes] = useState<TimeSlot[]>([
-    { id: 1, time: "08:00", enabled: true },
+    { id: 1, time: '08:00', enabled: true },
   ]);
   const [autoRefill, setAutoRefill] = useState(false);
   const [alertOpen, setAlertOpen] = useState(false);
@@ -68,10 +68,10 @@ function Agendamento() {
     const fetchAgendamentos = async () => {
       try {
         const response = await fetch(
-          "https://petsync.onrender.com/api/listaAgendamentos"
+          'https://petsync.onrender.com/api/listaAgendamentos'
         );
         if (!response.ok) {
-          throw new Error("Failed to fetch agendamentos");
+          throw new Error('Failed to fetch agendamentos');
         }
         const data = await response.json();
 
@@ -84,7 +84,7 @@ function Agendamento() {
         setTimes(transformedData);
         setAutoRefill(data[0]?.hasAutomatico || false);
       } catch (error) {
-        console.error("Error fetching agendamentos:", error);
+        console.error('Error fetching agendamentos:', error);
       }
     };
 
@@ -92,14 +92,14 @@ function Agendamento() {
   }, []);
 
   useEffect(() => {
-    const newSocket = new WebSocket("wss://petsync.onrender.com/");
+    const newSocket = new WebSocket('wss://petsync.onrender.com/');
 
-    newSocket.addEventListener("open", () => {
-      console.log("Connected to WebSocket server");
+    newSocket.addEventListener('open', () => {
+      console.log('Connected to WebSocket server');
       setSocket(newSocket);
     });
 
-    newSocket.addEventListener("message", (event) => {
+    newSocket.addEventListener('message', (event) => {
       try {
         const data = JSON.parse(event.data);
 
@@ -110,7 +110,7 @@ function Agendamento() {
         // Handle initial agendamentos data sent on connection
         if (data.agendamentos && Array.isArray(data.agendamentos)) {
           console.log(
-            "Received agendamentos via WebSocket:",
+            'Received agendamentos via WebSocket:',
             data.agendamentos
           );
           const transformedData = data.agendamentos.map(
@@ -127,25 +127,25 @@ function Agendamento() {
         }
 
         // Handle other message types
-        if (data.type === "dispenseFood") {
-          console.log("Dispense food message received:", data.message);
+        if (data.type === 'dispenseFood') {
+          console.log('Dispense food message received:', data.message);
         }
 
-        if (data.type === "agendamentosUpdate") {
-          console.log("Agendamentos update received:", data.agendamentos);
+        if (data.type === 'agendamentosUpdate') {
+          console.log('Agendamentos update received:', data.agendamentos);
         }
       } catch (error) {
-        console.error("Error parsing WebSocket message:", error);
+        console.error('Error parsing WebSocket message:', error);
       }
     });
 
-    newSocket.addEventListener("close", () => {
-      console.log("Disconnected from WebSocket server");
+    newSocket.addEventListener('close', () => {
+      console.log('Disconnected from WebSocket server');
       setSocket(null);
     });
 
-    newSocket.addEventListener("error", (event) => {
-      console.error("WebSocket error:", event);
+    newSocket.addEventListener('error', (event) => {
+      console.error('WebSocket error:', event);
       setSocket(null);
     });
 
@@ -165,7 +165,7 @@ function Agendamento() {
   const addTime = () => {
     if (times.length < 5) {
       const newId = Math.max(0, ...times.map((t) => t.id)) + 1;
-      setTimes([...times, { id: newId, time: "", enabled: !autoRefill }]);
+      setTimes([...times, { id: newId, time: '', enabled: !autoRefill }]);
     }
   };
 
@@ -178,7 +178,7 @@ function Agendamento() {
     field: keyof TimeSlot,
     value: string | boolean
   ) => {
-    if (field === "time") {
+    if (field === 'time') {
       setTimePickerOpen(null);
     }
     setTimes(
@@ -216,22 +216,22 @@ function Agendamento() {
         );
 
         const saveResponse = await fetch(
-          "https://petsync.onrender.com/api/salvarAgendamento",
+          'https://petsync.onrender.com/api/salvarAgendamento',
           {
-            method: "POST",
+            method: 'POST',
             headers: {
-              "Content-Type": "application/json",
+              'Content-Type': 'application/json',
             },
             body: JSON.stringify(agendamentos),
           }
         );
 
         if (!saveResponse.ok) {
-          throw new Error("Falha ao salvar agendamento");
+          throw new Error('Falha ao salvar agendamento');
         }
 
         const saveData = await saveResponse.json();
-        console.log("Save Response:", saveData);
+        console.log('Save Response:', saveData);
 
         // Send agendamentos data via WebSocket after successful save
         if (socket && socket.readyState === WebSocket.OPEN) {
@@ -240,12 +240,12 @@ function Agendamento() {
               agendamentos: agendamentos,
             })
           );
-          console.log("Agendamentos sent via WebSocket:", agendamentos);
+          console.log('Agendamentos sent via WebSocket:', agendamentos);
         }
 
         setAlertOpen(false);
       } catch (error) {
-        console.error("API Error:", error);
+        console.error('API Error:', error);
       } finally {
         setShouldSave(false);
       }
@@ -286,7 +286,7 @@ function Agendamento() {
               <div className="flex items-center space-x-2">
                 <RefreshCw
                   className={`h-5 w-5 ${
-                    autoRefill ? "text-green-500" : "text-gray-400"
+                    autoRefill ? 'text-green-500' : 'text-gray-400'
                   }`}
                 />
                 <Label
@@ -300,7 +300,7 @@ function Agendamento() {
                 checked={autoRefill}
                 onCheckedChange={toggleAutoRefill}
                 id="auto-refill"
-                className={autoRefill ? "bg-green-500" : ""}
+                className={autoRefill ? 'bg-green-500' : ''}
               />
             </div>
           </div>
@@ -325,13 +325,13 @@ function Agendamento() {
                             type="button"
                             variant="outline"
                             className={cn(
-                              "w-[140px] justify-start text-left font-normal",
-                              !time.time && "text-muted-foreground"
+                              'w-[140px] justify-start text-left font-normal',
+                              !time.time && 'text-muted-foreground'
                             )}
                             disabled={autoRefill}
                           >
                             <Clock className="mr-2 h-4 w-4" />
-                            {time.time || "Selecionar"}
+                            {time.time || 'Selecionar'}
                           </Button>
                         </PopoverTrigger>
                         <PopoverContent
@@ -352,16 +352,16 @@ function Agendamento() {
                                   key={option.value}
                                   variant={
                                     time.time === option.value
-                                      ? "default"
-                                      : "outline"
+                                      ? 'default'
+                                      : 'outline'
                                   }
                                   size="sm"
                                   className={cn(
-                                    "font-mono",
-                                    isUsed && "opacity-50 cursor-not-allowed"
+                                    'font-mono',
+                                    isUsed && 'opacity-50 cursor-not-allowed'
                                   )}
                                   onClick={() =>
-                                    updateTime(time.id, "time", option.value)
+                                    updateTime(time.id, 'time', option.value)
                                   }
                                   disabled={isUsed}
                                 >
@@ -383,7 +383,7 @@ function Agendamento() {
                     <Switch
                       checked={time.enabled}
                       onCheckedChange={(checked) =>
-                        updateTime(time.id, "enabled", checked)
+                        updateTime(time.id, 'enabled', checked)
                       }
                       id={`switch-${time.id}`}
                       disabled={autoRefill}
@@ -391,10 +391,10 @@ function Agendamento() {
                     <Label
                       htmlFor={`switch-${time.id}`}
                       className={`${
-                        autoRefill ? "text-gray-400" : "text-gray-700"
+                        autoRefill ? 'text-gray-400' : 'text-gray-700'
                       }`}
                     >
-                      {time.enabled && !autoRefill ? "Ativado" : "Inativo"}
+                      {time.enabled && !autoRefill ? 'Ativado' : 'Inativo'}
                     </Label>
                   </div>
 
@@ -437,15 +437,15 @@ function Agendamento() {
               <span>
                 {times.filter((t) => t.enabled).length}
                 {times.filter((t) => t.enabled).length !== 1
-                  ? " Refeições"
-                  : " Refeição"}
+                  ? ' Refeições'
+                  : ' Refeição'}
               </span>
             )}
           </div>
           <Button
             className="bg-black w-full sm:w-auto text-white hover:text-black"
             onClick={handleSaveClick}
-            variant={"outline"}
+            variant={'outline'}
           >
             Confirme Agendamento
           </Button>
